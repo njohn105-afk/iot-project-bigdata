@@ -1,0 +1,10 @@
+name: iotproj
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - jupyter
+  - pandas
+  - scikit-learn
+  - matplotlib
+prefix: C:\Users\brown\miniconda3\envs\iotproj

@@ -1,0 +1,10 @@
+data/
+*.pcap
+*.pcapng
+*.csv
+
+__pycache__/
+*.pyc
+
+.vscode/
+
