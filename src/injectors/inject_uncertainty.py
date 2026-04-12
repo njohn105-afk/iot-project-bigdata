@@ -35,7 +35,7 @@ def main():
     parser.add_argument("--input", default="data/processed/baseline.csv")
     parser.add_argument("--out-dir", default="data/corrupted")
     parser.add_argument("--loss-rates", default="0.1,0.3,0.5")
-    parser.add_argument("--noise-stds", default="0")
+    parser.add_argument("--noise-stds", default="0.1,0.3,0.5")
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
 
@@ -58,7 +58,7 @@ def main():
 
             loss_label = f"{int(round(loss_rate * 100))}pct"
             if noise_std > 0:
-                noise_label = f"_noise{int(round(noise_std))}"
+                noise_label = f"_noise{noise_std}"
             else:
                 noise_label = ""
 

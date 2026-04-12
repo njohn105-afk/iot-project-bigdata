@@ -1,8 +1,12 @@
 from pathlib import Path
 import pandas as pd
+import os
+import sys
 
-from src.methods.confidence_method import apply_confidence_method
+sys.path.append(os.path.abspath("src"))
 
+from methods.confidence_method import apply_confidence_method
+import evaluation.metrics as m
 
 def mae(series_a: pd.Series, series_b: pd.Series) -> float:
 	aligned = pd.DataFrame({"a": series_a, "b": series_b}).fillna(0)
@@ -18,8 +22,8 @@ def tune_confidence_method(
 		for loss_tolerance in [0.1, 0.2, 0.3]:
 			for loss_gate_ratio in [0.5, 0.6, 0.7]:
 				for length_tolerance in [0.1, 0.2, 0.3]:
-					for min_confidence in [0.3, 0.4, 0.5]:
-						for min_length_confidence in [0.3, 0.4, 0.5]:
+					for min_confidence in [0.3, 0.4, 0.5, 0.7, 0.8]:
+						for min_length_confidence in [0.3, 0.4, 0.5, 0.7, 0.8]:
 							for min_expected_packets in [1.0, 2.0]:
 								param_grid.append(
 									{
@@ -127,12 +131,27 @@ def main():
 		corrupted_avg_mae = mae(baseline["avg_length"], corrupted["avg_length"])
 		method_avg_mae = mae(baseline["avg_length"], method_df["final_avg_length"])
 
+		corrupted_similarity, corrupted_similarity_scores = m.window_accuracy_comparison(
+			baseline,
+			corrupted,
+		)
+
+		method_similarity, method_similarity_scores = m.window_accuracy_comparison(
+            baseline[["packet_count", "avg_length"]],
+			method_df.rename(columns={
+				"final_packet_count": "packet_count",
+				"final_avg_length": "avg_length",
+			})[["packet_count", "avg_length"]],
+		)
+
 		dataset_name = corrupted_path.stem
 		print(f"=== {dataset_name} ===")
 		print(f"Corrupted packet-count MAE: {corrupted_count_mae:.4f}")
 		print(f"Method packet-count MAE:    {method_count_mae:.4f}")
 		print(f"Corrupted avg-length MAE:   {corrupted_avg_mae:.4f}")
 		print(f"Method avg-length MAE:      {method_avg_mae:.4f}")
+		print(f"Corrupted similarity score: {corrupted_similarity:.3f}%")
+		print(f"Method similarity score:    {method_similarity:.3f}%")
 		print("Best params:")
 		print(best_params)
 		print()
@@ -198,6 +217,14 @@ def main():
 				"best_min_confidence": best_params["min_confidence"],
 				"best_min_length_confidence": best_params["min_length_confidence"],
 				"best_min_expected_packets": best_params["min_expected_packets"],
+				"corrupted_similarity_score": corrupted_similarity,
+                "method_similarity_score": method_similarity,
+                "corrupted_row_count_similarity": corrupted_similarity_scores["row_count"],
+                "corrupted_packet_count_similarity": corrupted_similarity_scores["packet_count"],
+                "corrupted_avg_length_similarity": corrupted_similarity_scores["avg_length"],
+                "method_row_count_similarity": method_similarity_scores["row_count"],
+                "method_packet_count_similarity": method_similarity_scores["packet_count"],
+                "method_avg_length_similarity": method_similarity_scores["avg_length"],
 			}
 		)
 
