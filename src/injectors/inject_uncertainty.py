@@ -14,7 +14,6 @@ def inject_packet_loss(df, loss_rate=0.1):
 def main():
     input_path = "data/processed/baseline.csv"
     output_path = "data/corrupted/corrupted_10pct.csv"
-
     df = pd.read_csv(input_path)
 
     print(f"Original rows: {len(df)}")

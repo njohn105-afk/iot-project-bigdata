@@ -23,6 +23,8 @@ def build_baseline(pcap_path: str) -> pd.DataFrame:
     packets = rdpcap(pcap_path)
     rows = []
 
+    print(len(packets))
+
     for i, pkt in enumerate(packets):
         try:
             rows.append(
@@ -43,7 +45,7 @@ def build_baseline(pcap_path: str) -> pd.DataFrame:
 
 
 def main():
-    input_path = Path("data/raw/sample.pcap")
+    input_path = Path("data/raw/day1_only.pcap")
     output_path = Path("data/processed/baseline.csv")
 
     if not input_path.exists():
@@ -54,7 +56,6 @@ def main():
         )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-
     df = build_baseline(str(input_path))
     df.to_csv(output_path, index=False)
 
