@@ -2,120 +2,75 @@ from pathlib import Path
 import pandas as pd
 
 
-# =========================
-# LOAD DATA
-# =========================
-def load_dataset(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    return df
+def mae(series_a: pd.Series, series_b: pd.Series) -> float:
+    aligned = pd.DataFrame({"a": series_a, "b": series_b}).fillna(0)
+    return (aligned["a"] - aligned["b"]).abs().mean()
 
 
-# =========================
-# GLOBAL QUERIES
-# =========================
-def packet_count(df):
-    return len(df)
-
-
-def avg_packet_length(df):
-    return df["length"].mean()
-
-
-def protocol_distribution(df):
-    return df["protocol"].value_counts(normalize=True)
-
-
-# =========================
-# TIME WINDOW QUERIES
-# =========================
-def add_time_window(df, window_size=1):
-    df = df.copy()
-    df["time_window"] = (df["timestamp"] // window_size).astype(int)
-    return df
-
-
-def packet_count_per_window(df):
-    return df.groupby("time_window").size()
-
-
-def avg_length_per_window(df):
-    return df.groupby("time_window")["length"].mean()
-
-
-# =========================
-# ENDPOINT QUERIES
-# =========================
-def top_sources(df):
-    return df["src_ip"].value_counts()
-
-
-def top_destinations(df):
-    return df["dst_ip"].value_counts()
-
-
-# =========================
-# MAIN EXPERIMENT
-# =========================
 def main():
-    baseline_path = Path("data/processed/baseline.csv")
-    corrupted_path = Path("data/corrupted/corrupted_10pct.csv")
+    baseline_path = Path("data/processed/baseline_windows.csv")
+    baseline = pd.read_csv(baseline_path).set_index("time_window")
 
-    baseline = load_dataset(baseline_path)
-    corrupted = load_dataset(corrupted_path)
+    corrupted_paths = sorted(Path("data/corrupted").glob("corrupted_*_windows.csv"))
+    if not corrupted_paths:
+        raise FileNotFoundError("No corrupted window datasets found in data/corrupted.")
 
-    print("=== GLOBAL METRICS ===")
-    print(f"Baseline count: {packet_count(baseline)}")
-    print(f"Corrupted count: {packet_count(corrupted)}")
+    out_dir = Path("reports/figures")
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"Baseline avg length: {avg_packet_length(baseline):.2f}")
-    print(f"Corrupted avg length: {avg_packet_length(corrupted):.2f}")
+    summaries = []
 
-    print("\n=== PROTOCOL DISTRIBUTION ===")
-    print("Baseline:")
-    print(protocol_distribution(baseline))
-    print("\nCorrupted:")
-    print(protocol_distribution(corrupted))
+    for corrupted_path in corrupted_paths:
+        corrupted = pd.read_csv(corrupted_path).set_index("time_window")
 
-    # =========================
-    # TIME WINDOW ANALYSIS
-    # =========================
-    baseline_tw = add_time_window(baseline, window_size=1)
-    corrupted_tw = add_time_window(corrupted, window_size=1)
+        all_windows = sorted(set(baseline.index).union(set(corrupted.index)))
+        baseline_aligned = baseline.reindex(all_windows).fillna(0)
+        corrupted_aligned = corrupted.reindex(all_windows).fillna(0)
 
-    baseline_counts = packet_count_per_window(baseline_tw)
-    corrupted_counts = packet_count_per_window(corrupted_tw)
+        count_mae = mae(
+            baseline_aligned["packet_count"],
+            corrupted_aligned["packet_count"],
+        )
+        avg_len_mae = mae(
+            baseline_aligned["avg_length"],
+            corrupted_aligned["avg_length"],
+        )
 
-    print("\n=== TIME WINDOW PACKET COUNTS ===")
-    print("Baseline (first 10):")
-    print(baseline_counts.head(10))
-    print("\nCorrupted (first 10):")
-    print(corrupted_counts.head(10))
+        dataset_name = corrupted_path.stem
+        print(f"=== {dataset_name} ===")
+        print(f"Window count MAE: {count_mae:.4f}")
+        print(f"Window avg-length MAE: {avg_len_mae:.4f}")
 
-    # =========================
-    # ENDPOINT ANALYSIS
-    # =========================
-    print("\n=== TOP SOURCE IPS ===")
-    print("Baseline:")
-    print(top_sources(baseline).head())
-    print("\nCorrupted:")
-    print(top_sources(corrupted).head())
+        comparison = pd.DataFrame(
+            {
+                "baseline_packet_count": baseline_aligned["packet_count"],
+                "corrupted_packet_count": corrupted_aligned["packet_count"],
+                "baseline_avg_length": baseline_aligned["avg_length"],
+                "corrupted_avg_length": corrupted_aligned["avg_length"],
+            }
+        )
+        comparison["count_abs_error"] = (
+            comparison["baseline_packet_count"] - comparison["corrupted_packet_count"]
+        ).abs()
+        comparison["avg_length_abs_error"] = (
+            comparison["baseline_avg_length"] - comparison["corrupted_avg_length"]
+        ).abs()
 
-    print("\n=== TOP DESTINATION IPS ===")
-    print("Baseline:")
-    print(top_destinations(baseline).head())
-    print("\nCorrupted:")
-    print(top_destinations(corrupted).head())
+        comparison.to_csv(out_dir / f"{dataset_name}_baseline_vs_corrupted.csv")
 
-    # =========================
-    # SAVE RESULTS
-    # =========================
-    output_dir = Path("reports/figures")
-    output_dir.mkdir(parents=True, exist_ok=True)
+        summaries.append(
+            {
+                "dataset": dataset_name,
+                "corrupted_packet_count_mae": count_mae,
+                "corrupted_avg_length_mae": avg_len_mae,
+            }
+        )
 
-    baseline_counts.to_csv(output_dir / "baseline_time_counts.csv")
-    corrupted_counts.to_csv(output_dir / "corrupted_time_counts.csv")
-
-    print("\nSaved time window results to reports/figures/")
+    summary_df = pd.DataFrame(summaries)
+    summary_df.to_csv(out_dir / "window_baseline_vs_corrupted.csv", index=False)
+    print("Saved:")
+    print("- reports/figures/window_baseline_vs_corrupted.csv")
+    print("- reports/figures/*_baseline_vs_corrupted.csv")
 
 
 if __name__ == "__main__":
